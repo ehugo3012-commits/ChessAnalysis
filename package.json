@@ -1,0 +1,31 @@
+{
+  "name": "chess-analysis",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Analyse your latest chess.com games in the browser and find your key weaknesses.",
+  "scripts": {
+    "engine": "node scripts/copy-engine.mjs",
+    "predev": "npm run engine",
+    "prebuild": "npm run engine",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "chess.js": "^1.4.0",
+    "react": "^19.3.1",
+    "react-chessboard": "^5.12.1",
+    "react-dom": "^19.3.1",
+    "stockfish": "^19.0.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  }
+}

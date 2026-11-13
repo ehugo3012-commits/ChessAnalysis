@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import fixture from './fixtures/chesscom.json';
+import evalFixture from './fixtures/evals.json';
 import { isValidUsername, normaliseUsername } from '../src/lib/chesscom';
 import { buildReport, moveAccuracy, severityOf, winPct } from '../src/lib/evaluate';
 import { analyse } from '../src/lib/insights';
+import { detectMotif, detectMotifInLine, isBackRankMate, lineToSan, materialSwing } from '../src/lib/tactics';
 import { extractClocks, outcomeOf, parseGame, parseOpening, parseTimeControl } from '../src/lib/parse';
 import type { AnalysedGame, Game, GameEval, GameReport, MoveError, RawGame } from '../src/lib/types';
 
@@ -122,6 +124,7 @@ describe('buildReport', () => {
       cp: [20, 20, 0, 0, 10, -900, -900],
       mate: [null, null, null, null, null, null, null],
       best: ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'e8f7', 'g1f3'],
+      pv: [],
     };
     const report = buildReport(game, ev);
     expect(report.errors).toHaveLength(1);
@@ -143,6 +146,7 @@ describe('buildReport', () => {
       cp: [20, -60, -80, -9990, -10000],
       mate: [null, null, null, -1, 0],
       best: ['e2e4', 'e7e5', 'e2e4', 'd8h4', null],
+      pv: [],
     };
     const report = buildReport(game, ev);
     const blunder = report.errors.find((e) => e.san === 'g4')!;
@@ -155,16 +159,67 @@ describe('buildReport', () => {
     expect(asBlack.opponentAccuracy!).toBeLessThan(asBlack.accuracy!);
   });
 
-  it('flags a missed chance after an opponent blunder', () => {
+  it('flags a missed free piece and explains it', () => {
     const game = gameFromMoves(['e4', 'e5', 'Nf3', 'Qh4', 'a3', 'Qxe4+']);
     const ev: GameEval = {
       cp: [20, 20, 20, 20, 600, 0, -100],
       mate: Array(7).fill(null),
       best: ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f3h4', 'h4e4', 'f1e2'],
+      pv: [],
     };
     const e = buildReport(game, ev).errors.find((x) => x.san === 'a3')!;
-    expect(e.type).toBe('missed_win');
+    expect(e.type).toBe('missed_tactic');
+    expect(e.motif).toBe('capture');
     expect(e.bestSan).toBe('Nxh4');
+    expect(e.explanation).toContain('Nxh4');
+    expect(e.explanation).toContain('queen');
+  });
+
+  it('attributes a lost game to its turning point', () => {
+    const game = gameFromMoves(['e4', 'e5', 'Qh5', 'Nc6', 'Qxf7+', 'Kxf7']);
+    const ev: GameEval = {
+      cp: [20, 20, 0, 0, 10, -900, -900],
+      mate: Array(7).fill(null),
+      best: ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'e8f7', 'g1f3'],
+      pv: [],
+    };
+    const report = buildReport(game, ev);
+    expect(report.decisive?.cause).toBe('hung');
+    expect(report.decisive?.error?.san).toBe('Qxf7+');
+    expect(report.errors[0].lostPiece).toBe('q');
+    expect(report.errors[0].explanation).toContain('queen');
+  });
+});
+
+describe('tactical motifs', () => {
+  it('recognises a knight fork', () => {
+    // Nc7+ hits the king on e8 and the rook on a8.
+    const hit = detectMotif('r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1', 'b5c7');
+    expect(hit?.motif).toBe('fork');
+    expect(hit?.targets.sort()).toEqual(['a8', 'e8']);
+  });
+
+  it('recognises a pin and a skewer', () => {
+    // Bb5 pins the knight on c6 to the king on e8.
+    expect(detectMotif('4k3/8/2n5/8/8/8/8/4KB2 w - - 0 1', 'f1b5')?.motif).toBe('pin');
+    // Ra8+ skewers the king on d8 and the queen on h8.
+    expect(detectMotif('3k3q/8/8/8/8/8/8/R3K3 w - - 0 1', 'a1a8')?.motif).toBe('skewer');
+  });
+
+  it('recognises a discovered attack', () => {
+    // The knight leaves the e-file with check, uncovering the rook against the queen on e7.
+    const hit = detectMotif('6k1/4q3/8/4N3/8/8/8/4R1K1 w - - 0 1', 'e5g6');
+    expect(hit?.motif).toBe('discovered');
+  });
+
+  it('measures material won over a line', () => {
+    // Nc7+ Kd8 Nxa8 wins a rook for nothing.
+    expect(materialSwing('r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1', ['b5c7', 'e8d8', 'c7a8'], 'w')).toBe(5);
+    expect(materialSwing('r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1', ['b5c7', 'e8d8', 'c7a8'], 'b')).toBe(-5);
+  });
+
+  it('spots a back-rank mate', () => {
+    expect(isBackRankMate('6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1', ['a1a8'])).toBe(true);
   });
 });
 
@@ -187,7 +242,11 @@ function fakeError(gameId: string, patch: Partial<MoveError>): MoveError {
     severity: 'blunder',
     type: 'hung',
     phase: 'middlegame',
-    missedMate: false,
+    motif: null,
+    lostPiece: 'n',
+    bestLine: ['g1f3'],
+    playedLine: ['d1d2', 'g5d2'],
+    explanation: 'Qd2 leaves your knight undefended.',
     inTimeTrouble: false,
     impulsive: false,
     ...patch,
@@ -232,6 +291,9 @@ function fakeGame(i: number, patch: Partial<Game>, report: Partial<GameReport>):
       hadLost: false,
       openingEval: 10,
       finalWin: 50,
+      habits: null,
+      endgame: null,
+      decisive: null,
       ...report,
     },
   };
@@ -247,6 +309,8 @@ describe('analyse', () => {
     expect(summary.typeCounts.hung).toBe(12);
     expect(insights[0].id).toBe('hung-pieces');
     expect(insights[0].examples.length).toBe(3);
+    expect(insights[0].cost).toBeCloseTo(4.8);
+    expect(insights[0].practice?.length).toBeGreaterThan(0);
     expect(new Set(insights[0].examples.map((e) => e.gameId)).size).toBe(3);
   });
 
@@ -258,7 +322,7 @@ describe('analyse', () => {
         {
           hadWinning: i < 10,
           finalWin: i < 4 ? 70 : 50,
-          errors: i < 6 ? [fakeError(`g${i}`, { type: 'other', inTimeTrouble: true, winBefore: 90, winAfter: 40 })] : [],
+          errors: i < 6 ? [fakeError(`g${i}`, { type: 'positional', inTimeTrouble: true, winBefore: 90, winAfter: 40 })] : [],
         },
       ),
     );
@@ -287,7 +351,92 @@ describe('analyse', () => {
     expect(strengths.some((s) => s.title.includes('Italian Game'))).toBe(true);
   });
 
+  it('names the dominant motif and flags opening habits and weak endgames', () => {
+    const games = Array.from({ length: 20 }, (_, i) =>
+      fakeGame(
+        i,
+        { outcome: i < 10 ? 'loss' : 'win' },
+        {
+          errors: i < 8 ? [fakeError(`g${i}`, { type: 'allowed_tactic', motif: i < 6 ? 'fork' : 'pin' })] : [],
+          habits: { castledAt: i < 9 ? null : 8, earlyQueen: false, minorsDeveloped: 2 },
+          openingEval: -60,
+          endgame: i < 8 ? { kind: 'rook', winAtEntry: 60 } : null,
+          decisive: i < 8 ? { cause: 'allowed_tactic', error: null } : null,
+        },
+      ),
+    );
+    const { insights, summary } = analyse(games);
+    const tactic = insights.find((x) => x.id === 'allowed-tactics')!;
+    expect(tactic.title).toContain('forks');
+    expect(tactic.evidence.join(' ')).toContain('turning point in 8 of your 10 losses');
+    expect(summary.motifsAllowed).toEqual({ fork: 6, pin: 2 });
+    expect(summary.lossCauses).toEqual({ allowed_tactic: 8 });
+    const opening = insights.find((x) => x.id === 'opening')!;
+    expect(opening.advice[0]).toContain('Castle by move 10');
+    const endgame = insights.find((x) => x.id === 'endgame')!;
+    expect(endgame.summary).toContain('8 endgames');
+    expect(endgame.advice.join(' ')).toContain('Lucena');
+  });
+
   it('handles an empty sample', () => {
     expect(analyse([]).insights).toEqual([]);
+  });
+});
+
+describe('full pipeline on the fixture games (engine output recorded at depth 12)', () => {
+  const evals = evalFixture as unknown as Record<string, GameEval>;
+  const analysed: AnalysedGame[] = rawGames
+    .filter((g) => evals[g.url] && g.rules === 'chess' && g.time_class === 'rapid')
+    .map((g) => {
+      const game = parseGame(g, USER)!;
+      return { game, report: buildReport(game, evals[g.url]) };
+    });
+  const result = analyse(analysed);
+  const serious = analysed.flatMap((g) => g.report.errors).filter((e) => e.severity !== 'inaccuracy');
+
+  it('classifies every serious error and explains it with legal lines', () => {
+    expect(analysed).toHaveLength(20);
+    expect(serious.length).toBeGreaterThan(20);
+    for (const e of serious) {
+      expect(e.explanation.length).toBeGreaterThan(20);
+      expect(e.explanation).not.toMatch(/undefined|null/);
+      // Both lines must be playable from the position, starting with the right moves.
+      expect(lineToSan(e.fenBefore, e.playedLine)[0]).toBe(e.san);
+      expect(lineToSan(e.fenBefore, e.bestLine)[0]).toBe(e.bestSan);
+      if (e.type === 'positional') expect(e.motif).not.toBeNull();
+      if (e.type === 'hung') expect(e.lostPiece).not.toBeNull();
+    }
+    const total = Object.values(result.summary.typeCounts).reduce((a, b) => a + b, 0);
+    expect(total).toBe(serious.length);
+  });
+
+  it('attributes every loss to a cause', () => {
+    const losses = analysed.filter((g) => g.game.outcome === 'loss');
+    expect(losses.every((g) => g.report.decisive)).toBe(true);
+    const attributed = Object.values(result.summary.lossCauses).reduce((a, b) => a + (b ?? 0), 0);
+    expect(attributed).toBe(losses.length);
+    expect(analysed.filter((g) => g.game.outcome === 'win').every((g) => g.report.decisive === null)).toBe(true);
+  });
+
+  it('ranks weaknesses by cost and gives each one a target, practice and examples', () => {
+    expect(result.insights.length).toBeGreaterThanOrEqual(3);
+    for (let i = 1; i < result.insights.length; i++) {
+      expect(result.insights[i - 1].severity).toBeGreaterThanOrEqual(result.insights[i].severity);
+    }
+    expect(result.insights[0].id).toBe('hung-pieces');
+    for (const ins of result.insights) {
+      expect(ins.target).toBeTruthy();
+      expect(ins.advice.length).toBeGreaterThanOrEqual(2);
+    }
+    const shown = result.insights.flatMap((i) => i.examples.map((e) => `${e.gameId}:${e.plyIndex}`));
+    expect(new Set(shown).size).toBe(shown.length);
+  });
+});
+
+describe('motifs inside a line', () => {
+  it('finds a fork that comes with check on a loosely defended piece', () => {
+    // Qxb4+ checks the king and hits the bishop on b5, which is attacked twice and defended once.
+    const fen = 'rn2kb1r/pp1bpppp/3p1n2/qBP5/1P2P3/5N2/P1P1QPPP/RNB1K2R b KQkq - 0 7';
+    expect(detectMotifInLine(fen, ['a5b4', 'b1d2', 'b4b5'])?.motif).toBe('fork');
   });
 });

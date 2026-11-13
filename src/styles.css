@@ -245,3 +245,122 @@ footer { margin-top: 48px; color: var(--muted); font-size: 12px; text-align: cen
   .card { padding: 16px; }
   button.primary { width: 100%; }
 }
+
+/* Tabs */
+.tabs {
+  position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; margin: 20px -16px 0; padding: 8px 16px;
+  background: var(--bg); border-bottom: 1px solid var(--border); overflow-x: auto;
+}
+.tabs button {
+  background: none; border: 0; color: var(--text-2); font-weight: 600; padding: 8px 14px; border-radius: 8px; white-space: nowrap;
+}
+.tabs button:hover { background: var(--surface-2); }
+.tabs button.active { background: var(--text); color: var(--surface); }
+
+/* Buttons */
+button.secondary {
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-weight: 600;
+}
+button.secondary:hover:not(:disabled) { border-color: var(--accent); }
+button.secondary.small { padding: 5px 10px; font-size: 13px; }
+button:disabled { opacity: 0.45; cursor: default; }
+button.inline-link { background: none; border: 0; padding: 0; color: var(--accent); font-weight: 600; }
+button.step {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); min-width: 34px; min-height: 34px; flex: none;
+}
+.center { text-align: center; }
+
+/* Lesson board */
+.moment-why { margin: 0; font-size: 14px; color: var(--text); }
+.line-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.line-tabs button {
+  flex: 1 1 auto; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 13px;
+  font-weight: 600; color: var(--text-2); border-left-width: 4px;
+}
+.line-tabs button.played { border-left-color: var(--critical); }
+.line-tabs button.best { border-left-color: var(--good); }
+.line-tabs button.active { background: var(--surface-2); color: var(--text); border-color: var(--text-2); }
+.line-tabs button.active.played { border-left-color: var(--critical); }
+.line-tabs button.active.best { border-left-color: var(--good); }
+.line-moves { display: flex; align-items: center; gap: 6px; }
+.line-sans { flex: 1; display: flex; flex-wrap: wrap; gap: 2px 4px; min-width: 0; }
+button.san { background: none; border: 0; padding: 2px 4px; border-radius: 4px; color: var(--text); font-variant-numeric: tabular-nums; }
+button.san.current { background: var(--accent); color: var(--accent-ink); }
+button.san.current .muted { color: inherit; }
+.pill.cost { color: var(--text-2); margin-left: 6px; }
+.goal { margin-top: 14px; padding: 10px 14px; background: var(--accent-soft); border-radius: 8px; }
+.goal p { margin: 3px 0; }
+.examples-head { display: flex; justify-content: space-between; align-items: end; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.examples-head h4 { margin-bottom: 0; }
+.progress-note { margin: 14px 0 0; }
+
+/* Practice */
+.practice-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
+.practice-score { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-2); }
+.practice-cols { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 24px; align-items: start; }
+.practice-board { width: 100%; border-radius: 6px; overflow: hidden; touch-action: none; }
+.practice-cols .moment-board { max-width: none; }
+.practice-prompt { font-size: 17px; margin-top: 0; }
+.practice-msg { min-height: 48px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); margin: 12px 0; font-weight: 600; }
+.practice-msg:empty { visibility: hidden; }
+.practice-msg.wrong { border-left: 4px solid var(--critical); }
+.practice-msg.correct { border-left: 4px solid var(--good); }
+.practice-msg.revealed { border-left: 4px solid var(--neutral); }
+.practice-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.practice-actions button.primary { width: auto; }
+.practice-dots { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.pdot {
+  width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); font-weight: 600;
+}
+.pdot.current { border-color: var(--text); color: var(--text); border-width: 2px; }
+.pdot.first { background: var(--good); color: #fff; border-color: var(--good); }
+.pdot.later { background: var(--warning); color: #0b0b0b; border-color: var(--warning); }
+.pdot.shown { background: var(--neutral); color: #fff; border-color: var(--neutral); }
+
+/* Game viewer */
+.viewer:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 8px; }
+.detail-cols { grid-template-columns: minmax(0, 340px) minmax(0, 1fr); margin-top: 12px; }
+.viewer-board > div:first-child { border-radius: 6px; overflow: hidden; }
+.viewer-controls { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.viewer-move { flex: 1; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+.callout { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--neutral); border-radius: 8px; padding: 10px 12px; }
+.callout.blunder { border-left-color: var(--critical); }
+.callout.mistake { border-left-color: var(--serious); }
+.callout p { margin: 6px 0 0; }
+.tag { display: inline-block; margin-left: 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 6px; border-radius: 999px; background: var(--text); color: var(--surface); vertical-align: 1px; }
+.evalgraph .cursor { stroke: var(--text); stroke-width: 1.5; }
+
+/* Progress */
+.progress-table td { border-bottom: 1px solid var(--border); padding: 8px 10px; }
+.progress-table tr:last-child td { border-bottom: 0; }
+.delta { font-weight: 600; white-space: nowrap; }
+.delta.better { color: var(--good-text); }
+.delta.worse { color: var(--critical); }
+
+@media (max-width: 640px) {
+  .practice-cols, .viewer .detail-cols { grid-template-columns: 1fr; }
+  .tabs button { padding: 8px 10px; }
+  .practice-head { flex-direction: column; gap: 4px; }
+}
+
+.practice-done { font-weight: 600; }
+.practice-legend { align-self: center; margin-left: 8px; }
+.practice-legend .dot { margin-left: 8px; }
+.dot.first { background: var(--good); }
+.dot.later { background: var(--warning); }
+.dot.shown { background: var(--neutral); }
+.checklist { margin-top: 12px; border-left: 4px solid var(--accent); }
+.checklist ol { margin: 8px 0 0; padding-left: 20px; font-size: 16px; }
+.checklist li { margin: 6px 0; }
+
+/* Piece images are inline SVGs: without this they sit on a text baseline and stretch the ranks. */
+.viewer-board svg, .moment-board svg, .practice-board svg { display: block; }
+
+/* The board library fills its parent's height, so give every board a square box of its own. */
+.board-box { width: 100%; aspect-ratio: 1 / 1; border-radius: 6px; overflow: hidden; }
+.detail-cols, .practice-cols { align-items: start; }
+.practice-prompt { margin: 0 0 14px; }
+.practice-side > :first-child { margin-top: 0; }
+
+.study-split { font-size: 16px; margin: 0 0 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.caution { border-left: 4px solid var(--warning); margin-bottom: 14px; }

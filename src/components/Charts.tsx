@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import type { Game, GameReport, MoveError } from '../lib/types';
+import type { Game, GameReport } from '../lib/types';
 import { SEVERITY_SYMBOL, moveLabel } from '../lib/format';
 
 export interface BarRow {
@@ -58,13 +58,14 @@ const PAD = { l: 34, r: 8, t: 8, b: 18 };
 export function EvalGraph({
   game,
   report,
-  selected,
-  onSelect,
+  cursor,
+  onSeek,
 }: {
   game: Game;
   report: GameReport;
-  selected: MoveError | null;
-  onSelect: (e: MoveError) => void;
+  /** Position index currently shown on the board. */
+  cursor: number;
+  onSeek: (position: number) => void;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const ref = useRef<SVGSVGElement>(null);
@@ -94,6 +95,8 @@ export function EvalGraph({
         aria-label="Your winning chances over the game"
         onPointerMove={onMove}
         onPointerLeave={() => setHover(null)}
+        onClick={() => hover !== null && onSeek(hover)}
+        style={{ cursor: 'pointer' }}
       >
         {[0, 50, 100].map((v) => (
           <g key={v}>
@@ -110,13 +113,14 @@ export function EvalGraph({
         ))}
         <path d={area} className="area" />
         <path d={line} className="line" />
+        <line x1={x(cursor)} x2={x(cursor)} y1={PAD.t} y2={H - PAD.b} className="cursor" />
         {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={PAD.t} y2={H - PAD.b} className="crosshair" />}
         {marks.map((e) => (
           <circle
             key={e.plyIndex}
             cx={x(e.plyIndex + 1)}
             cy={y(report.win[e.plyIndex + 1])}
-            r={selected === e ? 6.5 : 4.5}
+            r={cursor === e.plyIndex ? 6.5 : 4.5}
             className={`mark ${e.severity}`}
           />
         ))}
@@ -129,7 +133,10 @@ export function EvalGraph({
             r={12}
             fill="transparent"
             style={{ cursor: 'pointer' }}
-            onClick={() => onSelect(e)}
+            onClick={(ev) => {
+              ev.stopPropagation();
+              onSeek(e.plyIndex);
+            }}
           />
         ))}
       </svg>
@@ -151,7 +158,7 @@ export function EvalGraph({
         <span>
           <i className="dot mistake" /> Mistake
         </span>
-        <span>Your winning chances by move — click a marker to see the position</span>
+        <span>Your winning chances by move — click anywhere to jump to that position</span>
       </div>
     </div>
   );

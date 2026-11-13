@@ -90,10 +90,30 @@ export interface GameEval {
   mate: (number | null)[];
   /** Engine's best move (UCI) in each position, or null for terminal positions. */
   best: (string | null)[];
+  /** Engine's principal variation (UCI, first moves only) from each position. */
+  pv: string[][];
 }
 
 export type Severity = 'inaccuracy' | 'mistake' | 'blunder';
-export type ErrorType = 'hung' | 'missed_win' | 'allowed_mate' | 'other';
+export type ErrorType = 'hung' | 'allowed_tactic' | 'allowed_mate' | 'missed_tactic' | 'missed_mate' | 'positional';
+export type Motif =
+  // tactical ideas
+  | 'fork'
+  | 'pin'
+  | 'skewer'
+  | 'discovered'
+  | 'back_rank'
+  | 'capture'
+  // kinds of positional slip
+  | 'pawn'
+  | 'trade'
+  | 'king_pawn'
+  | 'development'
+  | 'technique'
+  | 'plan'
+  | null;
+/** What decided a lost game. */
+export type LossCause = ErrorType | 'time' | 'resigned_early' | 'outplayed';
 
 /** A user move that lost a meaningful amount of winning chances. */
 export interface MoveError {
@@ -116,7 +136,15 @@ export interface MoveError {
   severity: Severity;
   type: ErrorType;
   phase: Phase;
-  missedMate: boolean;
+  /** The tactical idea involved: the opponent's for "allowed" errors, the user's own for "missed" ones. */
+  motif: Motif;
+  /** Piece type the user lost (hung pieces) or failed to win. */
+  lostPiece: string | null;
+  /** Engine's best continuation from the position, and what follows the move played (UCI). */
+  bestLine: string[];
+  playedLine: string[];
+  /** One plain-language sentence saying what went wrong. */
+  explanation: string;
   inTimeTrouble: boolean;
   impulsive: boolean;
   clockBefore?: number;
@@ -147,6 +175,26 @@ export interface GameReport {
   openingEval: number | null;
   /** User's win probability in the final position. */
   finalWin: number;
+  habits: OpeningHabits | null;
+  endgame: EndgameEntry | null;
+  /** For lost games: what turned the game. */
+  decisive: { cause: LossCause; error: MoveError | null } | null;
+}
+
+/** Opening-principle facts, for games that lasted at least 10 moves. */
+export interface OpeningHabits {
+  /** Move number on which the user castled, or null if they never did. */
+  castledAt: number | null;
+  /** Queen moved two or more times in the first 8 moves. */
+  earlyQueen: boolean;
+  /** Knights and bishops off their starting squares after move 10 (0-4). */
+  minorsDeveloped: number;
+}
+
+export interface EndgameEntry {
+  kind: 'pawn' | 'rook' | 'minor' | 'queen' | 'mixed';
+  /** User's win probability when the endgame began. */
+  winAtEntry: number;
 }
 
 export interface AnalysedGame {
@@ -154,7 +202,7 @@ export interface AnalysedGame {
   report: GameReport;
 }
 
-export type InsightCategory = 'tactics' | 'time' | 'conversion' | 'opening' | 'phase' | 'mindset';
+export type InsightCategory = 'tactics' | 'time' | 'conversion' | 'opening' | 'phase' | 'mindset' | 'strategy';
 
 export interface Insight {
   id: string;
@@ -166,4 +214,12 @@ export interface Insight {
   evidence: string[];
   advice: string[];
   examples: MoveError[];
+  /** Winning chances given away to this weakness, in game points over the sample. */
+  cost?: number;
+  /** The number to watch, e.g. 0.85 "per game". Lower is better. */
+  metric?: { value: number; unit: string };
+  /** A concrete goal for the next batch of games. */
+  target?: string;
+  /** Where to practise exactly this. */
+  practice?: { label: string; url: string }[];
 }

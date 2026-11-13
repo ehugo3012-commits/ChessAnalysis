@@ -1,7 +1,8 @@
 import type { Game, GameEval } from './types';
 
 const ENGINE_URL = `${import.meta.env.BASE_URL}engine/stockfish-19-lite-single.js`;
-const CACHE_PREFIX = 'chess-insight:eval:v1';
+const CACHE_PREFIX = 'chess-insight:eval:v2';
+const PV_LENGTH = 10;
 export const MATE_CP = 10000;
 
 interface SearchResult {
@@ -9,6 +10,7 @@ interface SearchResult {
   cp: number;
   mate: number | null;
   best: string | null;
+  pv: string[];
 }
 
 /** One Stockfish instance in a Web Worker, driven over UCI. */
@@ -60,7 +62,7 @@ class EngineWorker {
 
   search(fen: string, depth: number): Promise<SearchResult> {
     return new Promise((resolve) => {
-      const result: SearchResult = { cp: 0, mate: null, best: null };
+      const result: SearchResult = { cp: 0, mate: null, best: null, pv: [] };
       this.onLine = (line) => {
         if (line.startsWith('info ') && line.includes(' score ')) {
           // Bound-only lines are intermediate aspiration-window results; skip them.
@@ -68,6 +70,8 @@ class EngineWorker {
           const m = line.match(/ score (cp|mate) (-?\d+)/);
           if (!m) return;
           const v = Number(m[2]);
+          const pv = line.match(/ pv (.+)$/);
+          if (pv) result.pv = pv[1].split(/\s+/).slice(0, PV_LENGTH);
           if (m[1] === 'cp') {
             result.cp = v;
             result.mate = null;
@@ -101,7 +105,7 @@ function readCache(game: Game, depth: number): GameEval | null {
     const raw = localStorage.getItem(cacheKey(game.id, depth));
     if (!raw) return null;
     const ev = JSON.parse(raw) as GameEval;
-    return ev.cp.length === game.plies.length + 1 ? ev : null;
+    return ev.cp.length === game.plies.length + 1 && Array.isArray(ev.pv) ? ev : null;
   } catch {
     return null;
   }
@@ -132,7 +136,7 @@ async function analyseGame(
   onPosition: () => void,
 ): Promise<GameEval | null> {
   const n = game.plies.length;
-  const ev: GameEval = { cp: new Array(n + 1), mate: new Array(n + 1), best: new Array(n + 1) };
+  const ev: GameEval = { cp: new Array(n + 1), mate: new Array(n + 1), best: new Array(n + 1), pv: new Array(n + 1) };
   engine.newGame();
   for (let i = 0; i <= n; i++) {
     if (isCancelled()) return null;
@@ -143,6 +147,7 @@ async function analyseGame(
       ev.cp[i] = mated ? (whiteToMove ? -MATE_CP : MATE_CP) : 0;
       ev.mate[i] = mated ? 0 : null;
       ev.best[i] = null;
+      ev.pv[i] = [];
     } else {
       const fen = i === n ? game.plies[n - 1].fenAfter : game.plies[i].fenBefore;
       const r = await engine.search(fen, depth);
@@ -150,6 +155,8 @@ async function analyseGame(
       ev.cp[i] = r.cp * sign;
       ev.mate[i] = r.mate === null ? null : r.mate * sign;
       ev.best[i] = r.best;
+      // The PV belongs to the final iteration only if it starts with the move actually chosen.
+      ev.pv[i] = r.best && r.pv[0] === r.best ? r.pv : r.best ? [r.best] : [];
     }
     onPosition();
   }
@@ -247,4 +254,35 @@ export function analyseGames(
       workers.forEach((w) => w.terminate());
     },
   };
+}
+
+/**
+ * A single on-demand engine for checking a move the user tries in practice mode.
+ * Returns the side-to-move's centipawn score after the move has been played.
+ */
+export class MoveJudge {
+  private engine: EngineWorker | null = null;
+  private ready: Promise<void> | null = null;
+  private queue: Promise<unknown> = Promise.resolve();
+
+  /** Score (centipawns, mate mapped to large values) for the player who just moved. */
+  scoreAfter(fenAfter: string, depth = 12): Promise<number> {
+    const job = this.queue.then(async () => {
+      if (!this.engine) {
+        this.engine = new EngineWorker();
+        this.ready = this.engine.init();
+      }
+      await this.ready;
+      const r = await this.engine.search(fenAfter, depth);
+      // No legal reply: the mover delivered mate (best is null with a mate score) or stalemate.
+      return -r.cp;
+    });
+    this.queue = job.catch(() => undefined);
+    return job;
+  }
+
+  dispose() {
+    this.engine?.terminate();
+    this.engine = null;
+  }
 }

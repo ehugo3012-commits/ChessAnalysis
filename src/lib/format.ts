@@ -1,4 +1,4 @@
-import type { EndReason, ErrorType, Outcome, Severity } from './types';
+import type { EndReason, ErrorType, LossCause, Outcome, Severity } from './types';
 
 export function formatClock(seconds: number | undefined): string {
   if (seconds === undefined) return '–';
@@ -46,10 +46,19 @@ export function endReasonLabel(reason: EndReason, outcome: Outcome): string {
 }
 
 export const ERROR_TYPE_LABEL: Record<ErrorType, string> = {
-  hung: 'Gave away material in one move',
-  missed_win: 'Missed a winning chance',
+  hung: 'Piece given away in one move',
+  allowed_tactic: 'Walked into a tactic',
   allowed_mate: 'Allowed a forced mate',
-  other: 'Deeper tactical or positional error',
+  missed_tactic: 'Missed a winning tactic',
+  missed_mate: 'Missed a forced mate',
+  positional: 'Positional slip (no material lost)',
+};
+
+export const LOSS_CAUSE_LABEL: Record<LossCause, string> = {
+  ...ERROR_TYPE_LABEL,
+  time: 'Lost on time in a playable position',
+  resigned_early: 'Resigned a playable position',
+  outplayed: 'Gradually outplayed',
 };
 
 export const SEVERITY_SYMBOL: Record<Severity, string> = { inaccuracy: '?!', mistake: '?', blunder: '??' };

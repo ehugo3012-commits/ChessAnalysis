@@ -18,7 +18,7 @@ const TIME_CLASSES: { id: TimeClass; label: string; hint: string }[] = [
 const DEPTHS = [
   { depth: 10, label: 'Quick' },
   { depth: 12, label: 'Standard' },
-  { depth: 15, label: 'Deep (slower)' },
+  { depth: 15, label: 'Deep (3–4× slower)' },
 ];
 
 type Status =
@@ -50,6 +50,8 @@ export default function App() {
   const runRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const engineRef = useRef<AnalysisHandle | null>(null);
+  /** When engine work started and how many positions were already done (cached) at that point. */
+  const paceRef = useRef<{ t: number; done: number } | null>(null);
 
   const stop = useCallback(() => {
     runRef.current++;
@@ -99,6 +101,7 @@ export default function App() {
         setGames(parsed);
 
         let last = 0;
+        paceRef.current = null;
         const collected = new Map<string, GameReport>();
         const handle = analyseGames(
           parsed,
@@ -106,6 +109,7 @@ export default function App() {
           (progress) => {
             // Position-level updates arrive very fast; repaint at most ~10x a second.
             const now = performance.now();
+            paceRef.current ??= { t: now, done: progress.positionsDone };
             if (live() && (now - last > 100 || progress.positionsDone === progress.positionsTotal)) {
               last = now;
               setStatus({ kind: 'analysing', progress });
@@ -173,7 +177,7 @@ export default function App() {
               />
             </label>
             <label className="field">
-              <span>Analysis</span>
+              <span>Engine depth</span>
               <select value={depth} onChange={(e) => setDepth(Number(e.target.value))}>
                 {DEPTHS.map((d) => (
                   <option key={d.depth} value={d.depth}>
@@ -232,7 +236,18 @@ export default function App() {
             <div className="progress-track">
               <div className="progress-fill" style={{ width: `${(status.progress.positionsDone / Math.max(1, status.progress.positionsTotal)) * 100}%` }} />
             </div>
-            <p className="muted small">Everything runs in your browser. This usually takes under a minute or two depending on your device; results are cached for next time.</p>
+            <p className="muted small">
+              {(() => {
+                const pace = paceRef.current;
+                const { positionsDone, positionsTotal } = status.progress;
+                const worked = pace ? positionsDone - pace.done : 0;
+                const elapsed = pace ? (performance.now() - pace.t) / 1000 : 0;
+                if (worked < 40 || elapsed < 2) return 'Estimating time remaining… ';
+                const left = Math.ceil(((positionsTotal - positionsDone) / worked) * elapsed);
+                return left > 90 ? `About ${Math.round(left / 60)} min left. ` : `About ${Math.max(5, Math.ceil(left / 5) * 5)} seconds left. `;
+              })()}
+              Everything runs in your browser and is cached, so the next visit is instant. Finished games can already be opened below.
+            </p>
           </div>
         )}
 
@@ -264,12 +279,15 @@ export default function App() {
                 {new Date(first.endTime * 1000).toLocaleDateString()} · {formatTimeControl(first.baseTime, first.increment, first.timeClass === 'daily')}
               </span>
             </div>
-            {analysis && <Report analysis={analysis} games={analysed} />}
-            <section>
-              <h2>Games</h2>
-              <p className="section-note">Click a game to see how your winning chances moved and where it turned.</p>
-              <GamesTable games={games} reports={reports} />
-            </section>
+            {analysis ? (
+              <Report analysis={analysis} games={analysed} user={subject.user} tc={subject.tc} />
+            ) : (
+              <section>
+                <h2>Games</h2>
+                <p className="section-note">Games become available to open as soon as each one has been analysed.</p>
+                <GamesTable games={games} reports={reports} />
+              </section>
+            )}
           </>
         )}
       </main>
